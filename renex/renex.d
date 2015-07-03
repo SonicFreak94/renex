@@ -23,13 +23,13 @@ int main(string[] argv)
 		string binary = stripExtension(baseName(argv[0]));
 		stdout.writeln(
 `Usage:
-	renex [arguments [path(s)]
+	renex [arguments] [path(s)]
 
 Arguments:
-	-M, --match     Regex pattern to match.
-	-R, --replace   Text to replace pattern with.
-	--recursive     Traverse all subdirectories.
-	-p, --pattern   Glob pattern to use when scanning a directory. (e.g: -p *.txt)
+	-m, --match         Regex pattern to match.
+	-r, --replace       Text to replace pattern with.
+	-R, --recursive     Traverse all subdirectories.
+	-p, --pattern       Glob pattern to use when scanning a directory. (e.g: -p *.txt)
 
 Example:
 	renex -M "(\d+)-(\d+)-(\d+)" -R "$3-$1-$2" -p *.txt --recursive "../My Awesome Path"`);
@@ -37,13 +37,14 @@ Example:
 		return ErrorCode.none;
 	}
 
-    try
+	try
 	{
 		// Argument setup
 		getopt(argv,
-			   "match|M",		&textMatch,
-			   "replace|R",		&textReplace,
-			   "recursive",		&recursive,
+			   config.caseSensitive,
+			   "match|m",		&textMatch,
+			   "replace|r",		&textReplace,
+			   "recursive|R",	&recursive,
 			   "pattern|p",		&pattern);
 
 		if (argv.length < 2)
@@ -111,7 +112,7 @@ Example:
 	}
 
 	stdout.writefln("Renamed %d items.", renameCount);
-    return ErrorCode.none;
+	return ErrorCode.none;
 }
 
 bool CheckMatch(T)(in string text, T regex)
