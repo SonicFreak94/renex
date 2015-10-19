@@ -20,7 +20,6 @@ int main(string[] argv)
 {
 	if (argv.length < 2)
 	{
-		string binary = stripExtension(baseName(argv[0]));
 		stdout.writeln(
 `Usage:
 	renex [arguments] [path(s)]
