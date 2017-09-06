@@ -9,7 +9,7 @@ Simple regex rename utility.
 -m, --match         Regex pattern to match.
 -r, --replace       Text to replace pattern with.
 -R, --recursive     Traverse all subdirectories.
--p, --pattern       Glob pattern to use when scanning a directory. (e.g: -p *.txt)
+-p, --pattern       Glob pattern to use when scanning a directory. (e.g: *.txt)
 ```
 
 ## Example
