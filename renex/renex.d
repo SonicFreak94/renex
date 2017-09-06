@@ -1,6 +1,11 @@
-import std.stdio, std.getopt;
-import std.file, std.path;
-import std.algorithm, std.regex;
+import std.algorithm;
+import std.array;
+import std.file;
+import std.getopt;
+import std.path;
+import std.regex;
+import std.stdio;
+import std.string;
 
 string textMatch;
 string textReplace;
@@ -18,39 +23,56 @@ enum ErrorCode : int
 
 int main(string[] argv)
 {
-	if (argv.length < 2)
-	{
-		stdout.writeln(
-`Usage:
-	renex [arguments] [path(s)]
-
-Arguments:
-	-m, --match         Regex pattern to match.
-	-r, --replace       Text to replace pattern with.
-	-R, --recursive     Traverse all subdirectories.
-	-p, --pattern       Glob pattern to use when scanning a directory. (e.g: -p *.txt)
-
-Example:
-	renex -M "(\d+)-(\d+)-(\d+)" -R "$3-$1-$2" -p *.txt --recursive "../My Awesome Path"`);
-
-		return ErrorCode.none;
-	}
-
 	try
 	{
-		// Argument setup
-		getopt(argv,
+		bool noArgs = argv.length < 2;
+
+		auto opt = getopt(argv,
 			   config.caseSensitive,
-			   "match|m",		&textMatch,
-			   "replace|r",		&textReplace,
-			   "recursive|R",	&recursive,
-			   "pattern|p",		&pattern);
+			   "match|m",
+			   "Regex pattern to match.",
+			   &textMatch,
+
+			   "replace|r",
+			   "Text to replace pattern with.",
+			   &textReplace,
+
+			   "recursive|R",
+			   "Traverse all subdirectories.",
+			   &recursive,
+
+			   "pattern|p",
+			   "Glob pattern to use when scanning a directory (e.g: *.txt)",
+			   &pattern);
+
+		if (noArgs || opt.helpWanted)
+		{
+			auto formatted = appender!string;
+			defaultGetoptFormatter(formatted, null, opt.options);
+
+			stdout.writeln("Regular expression rename utility.");
+
+			stdout.writeln();
+			stdout.writeln("Usage:");
+
+			formatted.data.splitLines()
+				.filter!(x => !x.empty)
+				.each!(x => stdout.writefln("\t%s", x));
+
+			stdout.writeln();
+			stdout.writeln(`Example:`);
+			stdout.write('\t');
+			stdout.writeln(`renex -M "(\d+)-(\d+)-(\d+)" -R "$3-$1-$2" -p *.txt --recursive "../My Awesome Path"`);
+
+			return ErrorCode.none;
+		}
 
 		if (argv.length < 2)
 		{
 			stdout.writeln("Insufficient arguments.");
 			return ErrorCode.invalidArgs;
 		}
+
 		if (textMatch == null)
 		{
 			stdout.writeln("Match text cannot be empty.");
@@ -66,20 +88,24 @@ Example:
 	}
 
 	auto regexMatch = regex(textMatch);
-	uint renameCount = 0;
+	size_t renameCount;
 
 	foreach (string s; argv[1..$])
 	{
 		if (!exists(s))
+		{
 			continue;
+		}
 
 		// If this string is a file, let's just rename it now and move on.
 		if (s.isFile() || !recursive && s.isDir())
 		{
-			if (CheckMatch(baseName(s), regexMatch))
+			if (checkMatch(baseName(s), regexMatch))
 			{
-				if (PerformRename(DirEntry(s), regexMatch, textReplace))
+				if (doRename(DirEntry(s), regexMatch, textReplace))
+				{
 					++renameCount;
+				}
 			}
 
 			continue;
@@ -89,14 +115,18 @@ Example:
 
 		foreach (DirEntry entry; dirEntries(s, pattern, spanMode))
 		{
-			if (CheckMatch(baseName(entry), regexMatch))
+			if (checkMatch(baseName(entry), regexMatch))
 			{
-				// If this entry is a directory, add to the directory index,
-				// otherwise rename immediately.
+				// If this entry is a directory, add to the directory index.
+				// Otherwise, rename immediately.
 				if (entry.isDir)
+				{
 					directoryIndex ~= entry;
-				else if (PerformRename(entry, regexMatch, textReplace))
+				}
+				else if (doRename(entry, regexMatch, textReplace))
+				{
 					++renameCount;
+				}
 			}
 		}
 
@@ -104,8 +134,10 @@ Example:
 		{
 			foreach (DirEntry entry; directoryIndex)
 			{
-				if (PerformRename(entry, regexMatch, textReplace))
+				if (doRename(entry, regexMatch, textReplace))
+				{
 					++renameCount;
+				}
 			}
 		}
 	}
@@ -114,12 +146,12 @@ Example:
 	return ErrorCode.none;
 }
 
-bool CheckMatch(T)(in string text, T regex)
+bool checkMatch(T)(in string text, T regex)
 {
 	return !matchAll(text, regex).empty;
 }
 
-void RegexRename(T)(in string path, T regex, in string replace)
+void regexRename(T)(in string path, T regex, in string replace)
 {
 	// These are split to avoid replacing accidental matches in the path to the target.
 	string name = baseName(path);
@@ -129,11 +161,11 @@ void RegexRename(T)(in string path, T regex, in string replace)
 	rename(path, buildNormalizedPath(dir, result));
 }
 
-bool PerformRename(T)(DirEntry entry, T regex, in string replace)
+bool doRename(T)(DirEntry entry, T regex, in string replace)
 {
 	try
 	{
-		RegexRename(entry.name, regex, replace);
+		regexRename(entry.name, regex, replace);
 	}
 	catch (Exception ex)
 	{
