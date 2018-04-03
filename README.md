@@ -6,11 +6,12 @@ Simple regex rename utility.
 
 ## Arguments
 ```
+-d, --dry           Performs a dry run, skipping the actual rename step. Matches and replacement results will be displayed.
 -m, --match         Regex pattern to match.
--r, --replace       Text to replace pattern with.
+-r, --replace       Text to replace the pattern with.
 -R, --recursive     Traverse all subdirectories.
--p, --pattern       Glob pattern to use when scanning a directory. (e.g: *.txt)
+-p, --pattern       Glob pattern to use when scanning a directory (e.g: *.txt)
 ```
 
 ## Example
-```renex -M "(\d+)-(\d+)-(\d+)" -R "$3-$1-$2" -p *.txt --recursive "../My Awesome Path"```
+```renex -m "(\d+)-(\d+)-(\d+)" -r "$3-$1-$2" -p *.txt --recursive "../some path"```

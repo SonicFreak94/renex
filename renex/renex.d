@@ -1,5 +1,6 @@
 import std.algorithm;
 import std.array;
+import std.exception : enforce;
 import std.file;
 import std.getopt;
 import std.path;
@@ -7,34 +8,32 @@ import std.regex;
 import std.stdio;
 import std.string;
 
-string textMatch;
-string textReplace;
-string pattern = "*";
-bool recursive = false;
-
-SpanMode spanMode;
-
-enum ErrorCode : int
+int main(string[] args)
 {
-	none,
-	invalidArgs,
-	nullPattern,
-}
+	SpanMode spanMode;
 
-int main(string[] argv)
-{
+	bool   dryRun;
+	string textMatch;
+	string textReplace;
+	string globPattern = "*";
+	bool   recursive;
+
 	try
 	{
-		bool noArgs = argv.length < 2;
+		const bool noArgs = args.length < 2;
 
-		auto opt = getopt(argv,
-			   config.caseSensitive,
+		auto opt = getopt(args, config.caseSensitive,
+			   "dry|d",
+			   "Performs a dry run, skipping the actual rename step. " ~
+			   "Matches and replacement results will be displayed.",
+			   &dryRun,
+
 			   "match|m",
 			   "Regex pattern to match.",
 			   &textMatch,
 
 			   "replace|r",
-			   "Text to replace pattern with.",
+			   "Text to replace the pattern with.",
 			   &textReplace,
 
 			   "recursive|R",
@@ -43,7 +42,7 @@ int main(string[] argv)
 
 			   "pattern|p",
 			   "Glob pattern to use when scanning a directory (e.g: *.txt)",
-			   &pattern);
+			   &globPattern);
 
 		if (noArgs || opt.helpWanted)
 		{
@@ -61,80 +60,65 @@ int main(string[] argv)
 
 			stdout.writeln();
 			stdout.writeln(`Example:`);
-			stdout.write('\t');
-			stdout.writeln(`renex -M "(\d+)-(\d+)-(\d+)" -R "$3-$1-$2" -p *.txt --recursive "../My Awesome Path"`);
+			stdout.writeln("\t", `renex -m "(\d+)-(\d+)-(\d+)" -r "$3-$1-$2" -p *.txt --recursive "../some path"`);
 
-			return ErrorCode.none;
+			return 0;
 		}
 
-		if (argv.length < 2)
-		{
-			stdout.writeln("Insufficient arguments.");
-			return ErrorCode.invalidArgs;
-		}
-
-		if (textMatch == null)
-		{
-			stdout.writeln("Match text cannot be empty.");
-			return ErrorCode.nullPattern;
-		}
+		enforce(args.length >= 2, "Insufficient arguments");
+		enforce(!textMatch.empty, "Match text cannot be empty.");
 
 		spanMode = (recursive) ? SpanMode.depth : SpanMode.shallow;
 	}
 	catch (Exception ex)
 	{
-		stdout.writeln(ex.msg);
-		return ErrorCode.invalidArgs;
+		stderr.writeln(ex.msg);
+		return -1;
 	}
 
-	auto regexMatch = regex(textMatch);
+	Regex!char regexMatch = regex(textMatch);
 	size_t renameCount;
 
-	foreach (string s; argv[1..$])
+	foreach (string s; args[1 .. $])
 	{
 		if (!exists(s))
 		{
 			continue;
 		}
 
-		// If this string is a file, let's just rename it now and move on.
-		if (s.isFile() || !recursive && s.isDir())
+		auto e = DirEntry(s);
+
+		// If this is a file (or a directory in non-recursive mode),
+		// let's just rename it now and move on.
+		if (e.isFile || !recursive)
 		{
-			if (checkMatch(baseName(s), regexMatch))
+			if (regexRename(e, regexMatch, textReplace, dryRun))
 			{
-				if (doRename(DirEntry(s), regexMatch, textReplace))
-				{
-					++renameCount;
-				}
+				++renameCount;
 			}
 
 			continue;
 		}
 
-		DirEntry[] directoryIndex;
+		Appender!(DirEntry[]) directories;
 
-		foreach (DirEntry entry; dirEntries(s, pattern, spanMode))
+		foreach (DirEntry entry; dirEntries(s, globPattern, spanMode))
 		{
-			if (checkMatch(baseName(entry), regexMatch))
+			if (entry.isDir)
 			{
-				// If this entry is a directory, add to the directory index.
-				// Otherwise, rename immediately.
-				if (entry.isDir)
-				{
-					directoryIndex ~= entry;
-				}
-				else if (doRename(entry, regexMatch, textReplace))
-				{
-					++renameCount;
-				}
+				directories.put(entry);
+			}
+			else if (regexRename(entry, regexMatch, textReplace, dryRun))
+			{
+				++renameCount;
 			}
 		}
 
-		if (directoryIndex.length > 0)
+		if (!directories.data.empty)
 		{
-			foreach (DirEntry entry; directoryIndex)
+			foreach (DirEntry entry; directories.data)
 			{
-				if (doRename(entry, regexMatch, textReplace))
+				if (regexRename(entry, regexMatch, textReplace, dryRun))
 				{
 					++renameCount;
 				}
@@ -142,34 +126,45 @@ int main(string[] argv)
 		}
 	}
 
-	stdout.writefln("Renamed %d items.", renameCount);
-	return ErrorCode.none;
+	if (dryRun)
+	{
+		stdout.writeln("Total matches: ", renameCount);
+	}
+	else
+	{
+		stdout.writefln("Renamed items: ", renameCount);
+	}
+
+	return 0;
 }
 
-bool checkMatch(T)(in string text, T regex)
-{
-	return !matchAll(text, regex).empty;
-}
-
-void regexRename(T)(in string path, T regex, in string replace)
-{
-	// These are split to avoid replacing accidental matches in the path to the target.
-	string name = baseName(path);
-	string dir = dirName(path);
-	string result = replaceAll(name, regex, replace);
-
-	rename(path, buildNormalizedPath(dir, result));
-}
-
-bool doRename(T)(DirEntry entry, T regex, in string replace)
+/// Renames a file or directory according to the given regular expression.
+bool regexRename(in DirEntry entry, in Regex!char regex, in string replace, bool dry)
 {
 	try
 	{
-		regexRename(entry.name, regex, replace);
+		// These are split to avoid replacing accidental matches in the path to the target.
+		string name   = baseName(entry.name);
+		string dir    = dirName(entry.name);
+		string result = replaceAll(name, regex, replace);
+
+		if (result == name)
+		{
+			return false;
+		}
+
+		if (dry)
+		{
+			stdout.writeln(entry.name ~ " -> " ~ buildNormalizedPath(dir, result));
+		}
+		else
+		{
+			rename(entry.name, buildNormalizedPath(dir, result));
+		}
 	}
 	catch (Exception ex)
 	{
-		stdout.writefln(`Error renaming %s: %s`, (entry.isFile) ? "file" : "directory", ex.msg);
+		stderr.writefln("Error renaming %s: %s", (entry.isFile) ? "file" : "directory", ex.msg);
 		return false;
 	}
 
