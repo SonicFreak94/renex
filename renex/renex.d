@@ -132,7 +132,7 @@ int main(string[] args)
 	}
 	else
 	{
-		stdout.writefln("Renamed items: ", renameCount);
+		stdout.writeln("Renamed items: ", renameCount);
 	}
 
 	return 0;
