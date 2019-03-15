@@ -1,0 +1,10 @@
+{
+	"description": "Simple regex rename utility.",
+	"license": "MIT",
+	"authors": [
+		"Michael Fadely"
+	],
+	"copyright": "Copyright © 2019, Michael Fadely",
+	"name": "renex",
+	"targetType": "executable"
+}
