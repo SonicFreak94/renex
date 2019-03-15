@@ -23,26 +23,26 @@ int main(string[] args)
 		const bool noArgs = args.length < 2;
 
 		auto opt = getopt(args, config.caseSensitive,
-			   "dry|d",
-			   "Performs a dry run, skipping the actual rename step. " ~
-			   "Matches and replacement results will be displayed.",
-			   &dryRun,
+		                  "dry|d",
+		                  "Performs a dry run, skipping the actual rename step. " ~
+		                  "Matches and replacement results will be displayed.",
+		                  &dryRun,
 
-			   "match|m",
-			   "Regex pattern to match.",
-			   &textMatch,
+		                  "match|m",
+		                  "Regex pattern to match.",
+		                  &textMatch,
 
-			   "replace|r",
-			   "Text to replace the pattern with.",
-			   &textReplace,
+		                  "replace|r",
+		                  "Text to replace the pattern with.",
+		                  &textReplace,
 
-			   "recursive|R",
-			   "Traverse all subdirectories.",
-			   &recursive,
+		                  "recursive|R",
+		                  "Traverse all subdirectories.",
+		                  &recursive,
 
-			   "pattern|p",
-			   "Glob pattern to use when scanning a directory (e.g: *.txt)",
-			   &globPattern);
+		                  "pattern|p",
+		                  "Glob pattern to use when scanning a directory (e.g: *.txt)",
+		                  &globPattern);
 
 		if (noArgs || opt.helpWanted)
 		{
